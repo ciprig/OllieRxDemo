@@ -7,8 +7,11 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
-
-import ro.cipri.ollierxdemo.dummy.DummyContent;
+import ollie.query.Select;
+import ro.cipri.ollierxdemo.domain.Note;
+import rx.Subscription;
+import rx.android.schedulers.AndroidSchedulers;
+import rx.schedulers.Schedulers;
 
 /**
  * A fragment representing a single Note detail screen.
@@ -24,11 +27,6 @@ public class NoteDetailFragment extends Fragment {
     public static final String ARG_ITEM_ID = "item_id";
 
     /**
-     * The dummy content this fragment is presenting.
-     */
-    private DummyContent.DummyItem mItem;
-
-    /**
      * Mandatory empty constructor for the fragment manager to instantiate the
      * fragment (e.g. upon screen orientation changes).
      */
@@ -38,13 +36,6 @@ public class NoteDetailFragment extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        if (getArguments().containsKey(ARG_ITEM_ID)) {
-            // Load the dummy content specified by the fragment
-            // arguments. In a real-world scenario, use a Loader
-            // to load content from a content provider.
-            mItem = DummyContent.ITEM_MAP.get(getArguments().getString(ARG_ITEM_ID));
-        }
     }
 
     @Override
@@ -53,9 +44,19 @@ public class NoteDetailFragment extends Fragment {
         View rootView = inflater.inflate(R.layout.fragment_note_detail, container, false);
 
         // Show the dummy content as text in a TextView.
-        if (mItem != null) {
-            ((TextView) rootView.findViewById(R.id.note_detail)).setText(mItem.content);
-        }
+
+        TextView textView = (TextView) rootView.findViewById(R.id.note_detail);
+
+        // Get observable of all notes
+
+        long id = getArguments().getLong(ARG_ITEM_ID, 0);
+
+        //FIXME memory leaks caused by async computation
+        Subscription ollie = Select.from(Note.class).where("_ID == ?", id).observableSingle()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(note -> textView.setText(note.body));
+
 
         return rootView;
     }

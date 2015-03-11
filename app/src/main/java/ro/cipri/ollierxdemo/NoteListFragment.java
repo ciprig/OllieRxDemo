@@ -7,8 +7,10 @@ import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
 
-
-import ro.cipri.ollierxdemo.dummy.DummyContent;
+import ollie.query.Select;
+import ro.cipri.ollierxdemo.domain.Note;
+import rx.android.schedulers.AndroidSchedulers;
+import rx.schedulers.Schedulers;
 
 /**
  * A list fragment representing a list of Notes. This fragment
@@ -47,7 +49,7 @@ public class NoteListFragment extends ListFragment {
         /**
          * Callback for when an item has been selected.
          */
-        public void onItemSelected(String id);
+        public void onItemSelected(long id);
     }
 
     /**
@@ -56,7 +58,7 @@ public class NoteListFragment extends ListFragment {
      */
     private static Callbacks sDummyCallbacks = new Callbacks() {
         @Override
-        public void onItemSelected(String id) {
+        public void onItemSelected(long id) {
         }
     };
 
@@ -71,12 +73,20 @@ public class NoteListFragment extends ListFragment {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // TODO: replace with a real list adapter.
-        setListAdapter(new ArrayAdapter<DummyContent.DummyItem>(
-                getActivity(),
-                android.R.layout.simple_list_item_activated_1,
-                android.R.id.text1,
-                DummyContent.ITEMS));
+        ArrayAdapter adapter = new ArrayAdapter<Note>(getActivity(),android.R.layout.simple_list_item_activated_1,android.R.id.text1) {
+            /** need to support on click listener by id */
+            @Override 
+            public long getItemId(int position) {
+                return super.getItem(position).id;
+            }
+        };
+
+        //FIXME memory leaks caused by async computation
+        Select.from(Note.class).observable()
+                .subscribeOn(Schedulers.io())//read from db async
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(notes -> adapter.addAll(notes));
+        setListAdapter(adapter);
     }
 
     @Override
@@ -116,7 +126,7 @@ public class NoteListFragment extends ListFragment {
 
         // Notify the active callbacks interface (the activity, if the
         // fragment is attached to one) that an item has been selected.
-        mCallbacks.onItemSelected(DummyContent.ITEMS.get(position).id);
+        mCallbacks.onItemSelected(id);
     }
 
     @Override
