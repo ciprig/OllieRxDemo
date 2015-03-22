@@ -23,6 +23,7 @@ public class Note extends Model {
     public static void populateDummy() {
 
         Schedulers.io().createWorker().schedule(() -> {
+            ollie.query.Delete.from(Note.class).execute(false);
             for (int i = 0; i < 10; i++) {
                 Note note = new Note();
                 note.title = "hello" + i;

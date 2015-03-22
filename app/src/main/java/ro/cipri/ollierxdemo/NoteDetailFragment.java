@@ -25,6 +25,7 @@ public class NoteDetailFragment extends Fragment {
      * represents.
      */
     public static final String ARG_ITEM_ID = "item_id";
+    private Subscription subscription;
 
     /**
      * Mandatory empty constructor for the fragment manager to instantiate the
@@ -52,12 +53,18 @@ public class NoteDetailFragment extends Fragment {
         long id = getArguments().getLong(ARG_ITEM_ID, 0);
 
         //FIXME memory leaks caused by async computation
-        Subscription ollie = Select.from(Note.class).where("_ID == ?", id).observableSingle()
+        subscription = Select.from(Note.class).where("_ID == ?", id).observableSingle()
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(note -> textView.setText(note.body));
 
 
         return rootView;
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        subscription.unsubscribe();
     }
 }

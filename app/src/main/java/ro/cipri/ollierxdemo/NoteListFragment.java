@@ -3,13 +3,27 @@ package ro.cipri.ollierxdemo;
 import android.app.Activity;
 import android.os.Bundle;
 import android.support.v4.app.ListFragment;
+import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
 
+import com.github.stephanenicolas.loglifecycle.LogLifeCycle;
+
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import ollie.Ollie;
 import ollie.query.Select;
 import ro.cipri.ollierxdemo.domain.Note;
+import rx.Observable;
+import rx.Subscription;
+import rx.android.app.AppObservable;
 import rx.android.schedulers.AndroidSchedulers;
+import rx.functions.Action0;
+import rx.observables.ConnectableObservable;
 import rx.schedulers.Schedulers;
 
 /**
@@ -17,10 +31,11 @@ import rx.schedulers.Schedulers;
  * also supports tablet devices by allowing list items to be given an
  * 'activated' state upon selection. This helps indicate which item is
  * currently being viewed in a {@link NoteDetailFragment}.
- * <p/>
+ * <p>
  * Activities containing this fragment MUST implement the {@link Callbacks}
  * interface.
  */
+//@LogLifeCycle
 public class NoteListFragment extends ListFragment {
 
     /**
@@ -39,6 +54,8 @@ public class NoteListFragment extends ListFragment {
      * The current activated item position. Only used on tablets.
      */
     private int mActivatedPosition = ListView.INVALID_POSITION;
+    private Subscription subscription;
+    private Observable<List<Note>> obs;
 
     /**
      * A callback interface that all activities containing this fragment must
@@ -72,32 +89,62 @@ public class NoteListFragment extends ListFragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setRetainInstance(true);
 
-        ArrayAdapter adapter = new ArrayAdapter<Note>(getActivity(),android.R.layout.simple_list_item_activated_1,android.R.id.text1) {
+        ArrayAdapter adapter = new ArrayAdapter<Note>(getActivity(), android.R.layout.simple_list_item_activated_1, android.R.id.text1) {
             /** need to support on click listener by id */
-            @Override 
+            @Override
             public long getItemId(int position) {
                 return super.getItem(position).id;
             }
-        };
 
-        //FIXME memory leaks caused by async computation
-        Select.from(Note.class).observable()
-                .subscribeOn(Schedulers.io())//read from db async
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(notes -> adapter.addAll(notes));
+
+        };
         setListAdapter(adapter);
+
+
+        obs = //AppObservable.bindFragment(this,
+                Select.from(Note.class)
+                        .observable()
+                        .delay(3, TimeUnit.SECONDS)
+                        .subscribeOn(Schedulers.io())//read from db async
+                        .last()// only care for last item
+                        .cache()
+                        .observeOn(AndroidSchedulers.mainThread())
+                        .doOnSubscribe(() -> setListShown(false))
+                        .doOnCompleted(() -> setListShown(true));
+
+
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        return super.onCreateView(inflater, container, savedInstanceState);
+    }
+
+    @Override
+    public void onDestroyView() {
+        subscription.unsubscribe();
+        ((ArrayAdapter) getListAdapter()).clear();
+        super.onDestroyView();
     }
 
     @Override
     public void onViewCreated(View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        subscription = obs.subscribe(notes -> ((ArrayAdapter) getListAdapter()).addAll(notes));
         // Restore the previously serialized activated item position.
         if (savedInstanceState != null
                 && savedInstanceState.containsKey(STATE_ACTIVATED_POSITION)) {
             setActivatedPosition(savedInstanceState.getInt(STATE_ACTIVATED_POSITION));
         }
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        //subscription.unsubscribe();
     }
 
     @Override
